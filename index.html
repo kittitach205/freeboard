@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IoT Freeboard – iot-205</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#0f172a;--card:#1e293b;--text:#e2e8f0;--mute:#94a3b8;--ok:#22c55e;--bad:#ef4444;--line:#334155}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI","Sarabun",system-ui,sans-serif;background:var(--bg);color:var(--text)}
+  header{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:1.3rem}
+  .status{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:.9rem}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  main{padding:20px;max-width:1200px;margin:auto}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+  .card{background:var(--card);border-radius:12px;padding:16px;border:1px solid var(--line)}
+  .card .lbl{color:var(--mute);font-size:.85rem}
+  .card .val{font-size:2rem;font-weight:700;margin-top:6px}
+  .card .unit{font-size:.9rem;color:var(--mute);font-weight:400}
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-top:14px}
+  .chartbox{background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--line)}
+  .chartbox h3{margin:0 0 8px;font-size:1rem}
+  canvas{max-height:240px}
+  table{width:100%;border-collapse:collapse;font-size:.85rem}
+  th,td{padding:8px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--mute);font-weight:600}
+  .tablebox{background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--line);margin-top:14px;overflow-x:auto}
+  .err{background:#7f1d1d;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌡️ IoT Freeboard <span style="color:var(--mute);font-weight:400">· iot-205</span></h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="status">กำลังเชื่อมต่อ...</span></div>
+</header>
+<main>
+  <div class="err" id="err"></div>
+  <div class="cards" id="cards"></div>
+  <div class="charts" id="charts"></div>
+  <div class="tablebox">
+    <h3 style="margin:0 0 8px">ประวัติล่าสุด (History)</h3>
+    <table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+  </div>
+</main>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue, query, limitToLast, orderByKey } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// ===== แก้ค่านี้: ดูได้ที่ Firebase Console > Project settings > Your apps > Web app =====
+const firebaseConfig = {
+  apiKey: "AIzaSyC7SXffNszDQHdixCtC40jri5L0lniLnts",
+  authDomain: "iot-205-dd293.firebaseapp.com",
+  databaseURL: "https://iot-205-dd293-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "iot-205-dd293",
+  storageBucket: "iot-205-dd293.firebasestorage.app",
+  messagingSenderId: "1012559054991",
+  appId: "1:1012559054991:web:43c2e54a1bd207f5a088fa"
+};
+// ==========================================================================================
+
+const FIELDS = [
+  { key:"temperature",   label:"อุณหภูมิ",     unit:"°C",    color:"#f97316", dec:1 },
+  { key:"humidity",      label:"ความชื้นอากาศ", unit:"%",     color:"#38bdf8", dec:1 },
+  { key:"light",         label:"ความสว่าง",     unit:"lux",   color:"#facc15", dec:0 },
+  { key:"soil_moisture", label:"ความชื้นดิน",   unit:"%",     color:"#a3e635", dec:1 },
+  { key:"pm25",          label:"ฝุ่น PM2.5",    unit:"µg/m³", color:"#f472b6", dec:1 },
+  { key:"battery",       label:"แบตเตอรี่",     unit:"%",     color:"#34d399", dec:0 },
+];
+const HISTORY_N = 30;
+const STALE_MS = 60000; // เกิน 60 วิ ถือว่า offline
+
+const $ = id => document.getElementById(id);
+$("cards").innerHTML = FIELDS.map(f=>`<div class="card"><div class="lbl">${f.label}</div><div class="val" id="v_${f.key}" style="color:${f.color}">--<span class="unit"> ${f.unit}</span></div></div>`).join("");
+$("charts").innerHTML = FIELDS.map(f=>`<div class="chartbox"><h3>${f.label} (${f.unit})</h3><canvas id="c_${f.key}"></canvas></div>`).join("");
+$("thead").innerHTML = "<tr><th>เวลา</th>"+FIELDS.map(f=>`<th>${f.label}</th>`).join("")+"</tr>";
+
+const charts = {};
+FIELDS.forEach(f=>{
+  charts[f.key] = new Chart($("c_"+f.key), {
+    type:"line",
+    data:{ labels:[], datasets:[{ data:[], borderColor:f.color, backgroundColor:f.color+"33", fill:true, tension:.3, pointRadius:2 }] },
+    options:{ animation:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{color:"#94a3b8",maxTicksLimit:6},grid:{color:"#334155"}}, y:{ticks:{color:"#94a3b8"},grid:{color:"#334155"}} } }
+  });
+});
+
+const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString("th-TH") : "-";
+let lastTs = 0;
+
+function showErr(m){ const e=$("err"); e.textContent=m; e.style.display="block"; }
+
+try {
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  // ค่าล่าสุด (Realtime)
+  onValue(ref(db,"latest"), snap=>{
+    const d = snap.val(); if(!d) return;
+    FIELDS.forEach(f=>{
+      const v = d[f.key];
+      $("v_"+f.key).innerHTML = (v!=null ? Number(v).toFixed(f.dec) : "--") + `<span class="unit"> ${f.unit}</span>`;
+    });
+    lastTs = Date.now();
+    $("dot").classList.add("on");
+    $("status").textContent = "Online · อัปเดตล่าสุด " + fmtTime(d.timestamp || Date.now());
+  }, e=>showErr("อ่าน /latest ไม่ได้: "+e.message));
+
+  // ประวัติ (Realtime)
+  onValue(query(ref(db,"history"), orderByKey(), limitToLast(HISTORY_N)), snap=>{
+    const rows = [];
+    snap.forEach(c=>rows.push(c.val()));
+    const labels = rows.map(r=>fmtTime(r.timestamp));
+    FIELDS.forEach(f=>{
+      const ch = charts[f.key];
+      ch.data.labels = labels;
+      ch.data.datasets[0].data = rows.map(r=>r[f.key]);
+      ch.update();
+    });
+    $("tbody").innerHTML = rows.slice().reverse().slice(0,15).map(r=>
+      `<tr><td>${fmtTime(r.timestamp)}</td>${FIELDS.map(f=>`<td>${r[f.key]!=null?Number(r[f.key]).toFixed(f.dec):"-"}</td>`).join("")}</tr>`
+    ).join("");
+  }, e=>showErr("อ่าน /history ไม่ได้: "+e.message));
+
+  // เช็คว่าอุปกรณ์ยังส่งข้อมูลอยู่ไหม
+  setInterval(()=>{
+    if(lastTs && Date.now()-lastTs > STALE_MS){
+      $("dot").classList.remove("on");
+      $("status").textContent = "ไม่มีข้อมูลใหม่เกิน 1 นาที";
+    }
+  }, 5000);
+} catch(e){ showErr("ตั้งค่า Firebase ไม่ถูกต้อง: "+e.message); }
+</script>
+</body>
+</html>
