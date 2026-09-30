@@ -113,7 +113,8 @@ try {
   // ประวัติ (Realtime)
   onValue(query(ref(db,"history"), orderByKey(), limitToLast(HISTORY_N)), snap=>{
     const rows = [];
-    snap.forEach(c=>rows.push(c.val()));
+    snap.forEach(c=>{ rows.push(c.val()); });  // ต้องไม่ return ค่า ไม่งั้น forEach หยุดหลังรายการแรก
+    rows.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
     const labels = rows.map(r=>fmtTime(r.timestamp));
     FIELDS.forEach(f=>{
       const ch = charts[f.key];
