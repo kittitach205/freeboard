@@ -4,54 +4,168 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IoT Freeboard – iot-205</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
-  :root{--bg:#0f172a;--card:#1e293b;--text:#e2e8f0;--mute:#94a3b8;--ok:#22c55e;--bad:#ef4444;--line:#334155}
+  :root{
+    --bg:#0b1220; --panel:rgba(30,41,59,.62); --panel-solid:#162033; --line:rgba(148,163,184,.18);
+    --text:#e8eefc; --mute:#94a3b8; --ok:#22c55e; --bad:#ef4444; --up:#34d399; --down:#fb7185;
+  }
   *{box-sizing:border-box}
-  body{margin:0;font-family:"Segoe UI","Sarabun",system-ui,sans-serif;background:var(--bg);color:var(--text)}
-  header{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
-  h1{margin:0;font-size:1.3rem}
-  .status{display:flex;align-items:center;gap:8px;color:var(--mute);font-size:.9rem}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
-  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
-  main{padding:20px;max-width:1200px;margin:auto}
-  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
-  .card{background:var(--card);border-radius:12px;padding:16px;border:1px solid var(--line)}
-  .card .lbl{color:var(--mute);font-size:.85rem}
-  .card .val{font-size:2rem;font-weight:700;margin-top:6px}
-  .card .unit{font-size:.9rem;color:var(--mute);font-weight:400}
-  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-top:14px}
-  .chartbox{background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--line)}
-  .chartbox h3{margin:0 0 8px;font-size:1rem}
-  canvas{max-height:240px}
-  table{width:100%;border-collapse:collapse;font-size:.85rem}
-  th,td{padding:8px;text-align:right;border-bottom:1px solid var(--line)}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; color:var(--text); min-height:100vh;
+    font-family:"Sarabun","Prompt","Segoe UI",system-ui,sans-serif;
+    background:
+      radial-gradient(1100px 560px at 8% -8%, rgba(59,130,246,.28), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(168,85,247,.24), transparent 60%),
+      radial-gradient(800px 500px at 50% 110%, rgba(16,185,129,.14), transparent 60%),
+      var(--bg);
+    background-attachment:fixed;
+  }
+  h1,h2,h3,.val,.brand{font-family:"Prompt","Sarabun",sans-serif}
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky; top:0; z-index:20; display:flex; flex-wrap:wrap; gap:10px;
+    justify-content:space-between; align-items:center; padding:14px 24px;
+    background:rgba(11,18,32,.72); backdrop-filter:blur(14px); border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:12px}
+  .logo{
+    width:42px; height:42px; border-radius:12px; display:grid; place-items:center; font-size:22px;
+    background:linear-gradient(135deg,#3b82f6,#a855f7); box-shadow:0 6px 20px rgba(99,102,241,.45);
+  }
+  .brand h1{margin:0; font-size:1.25rem; font-weight:600; letter-spacing:.2px}
+  .brand small{display:block; color:var(--mute); font-family:"Sarabun"; font-size:.82rem; margin-top:1px}
+  .pill{
+    display:flex; align-items:center; gap:9px; padding:8px 14px; border-radius:999px;
+    background:var(--panel); border:1px solid var(--line); font-size:.88rem; color:var(--mute);
+  }
+  .dot{width:10px; height:10px; border-radius:50%; background:var(--bad); flex:none}
+  .dot.on{background:var(--ok); animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.65)}70%{box-shadow:0 0 0 10px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  .pill.online{color:#bbf7d0; border-color:rgba(34,197,94,.35)}
+
+  main{max-width:1240px; margin:0 auto; padding:24px 20px 40px}
+  .sec-title{display:flex; align-items:center; gap:10px; margin:28px 0 12px; font-size:1.02rem; font-weight:600}
+  .sec-title::before{content:""; width:4px; height:18px; border-radius:4px; background:linear-gradient(#3b82f6,#a855f7)}
+  .err{display:none; background:rgba(127,29,29,.75); border:1px solid #ef4444; padding:10px 14px; border-radius:12px; margin-bottom:14px}
+
+  /* ---------- KPI ---------- */
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px}
+  .kpi{
+    position:relative; overflow:hidden; padding:16px 16px 14px; border-radius:18px;
+    background:var(--panel); border:1px solid var(--line); backdrop-filter:blur(8px);
+    transition:transform .2s, border-color .2s;
+  }
+  .kpi:hover{transform:translateY(-3px); border-color:var(--c)}
+  .kpi::before{content:""; position:absolute; inset:0 0 auto 0; height:3px; background:var(--c)}
+  .kpi::after{content:""; position:absolute; right:-30px; top:-30px; width:110px; height:110px; border-radius:50%;
+    background:var(--c); opacity:.12; filter:blur(6px)}
+  .kpi-top{display:flex; align-items:center; gap:8px; color:var(--mute); font-size:.86rem}
+  .ico{font-size:1.15rem}
+  .val{margin-top:8px; font-size:2.1rem; font-weight:600; color:var(--c); line-height:1.1}
+  .unit{font-size:.9rem; color:var(--mute); font-weight:400; margin-left:5px; font-family:"Sarabun"}
+  .delta{margin-top:6px; font-size:.78rem; color:var(--mute); min-height:1.1em}
+  .delta.up{color:var(--up)} .delta.down{color:var(--down)}
+  .kpi.flash{animation:flash .7s}
+  @keyframes flash{0%{background:rgba(255,255,255,.14)}100%{background:var(--panel)}}
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    display:flex; flex-wrap:wrap; align-items:center; gap:14px; padding:14px 16px; border-radius:16px;
+    background:var(--panel); border:1px solid var(--line);
+  }
+  .toolbar label{color:var(--mute); font-size:.9rem}
+  select{
+    appearance:none; -webkit-appearance:none; font:inherit; font-size:.92rem; color:var(--text);
+    background:#101a2e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 12px center;
+    border:1px solid var(--line); border-radius:10px; padding:9px 36px 9px 14px; min-width:250px; cursor:pointer;
+  }
+  select:focus{outline:2px solid rgba(99,102,241,.6)}
+  .info{margin-left:auto; color:var(--mute); font-size:.85rem}
+  .info b{color:var(--text); font-weight:600}
+
+  /* ---------- stats ---------- */
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px}
+  .stat{padding:14px 16px; border-radius:16px; background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--c)}
+  .stat-h{font-weight:500; font-size:.95rem; margin-bottom:10px}
+  .stat-h small{color:var(--mute); font-weight:400}
+  .stat-row{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center}
+  .stat-row div{background:rgba(15,23,42,.55); border-radius:10px; padding:8px 4px}
+  .stat-row span{display:block; font-size:.72rem; color:var(--mute); margin-bottom:2px}
+  .stat-row b{font-family:"Prompt"; font-size:1.05rem; font-weight:500}
+  .stat-row div:nth-child(1) b{color:#7dd3fc} .stat-row div:nth-child(2) b{color:var(--c)} .stat-row div:nth-child(3) b{color:#fda4af}
+
+  /* ---------- charts ---------- */
+  .charts{display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px}
+  .chartbox{padding:14px 16px 12px; border-radius:18px; background:var(--panel); border:1px solid var(--line)}
+  .chartbox h3{margin:0 0 8px; font-size:.95rem; font-weight:500; display:flex; align-items:center; gap:8px}
+  .chartbox h3 span{color:var(--mute); font-weight:400; font-size:.82rem}
+  .chartwrap{position:relative; height:210px}
+
+  /* ---------- history ---------- */
+  .tablebox{border-radius:18px; background:var(--panel); border:1px solid var(--line); overflow:hidden}
+  .tablescroll{max-height:300px; overflow:auto}
+  table{width:100%; border-collapse:collapse; font-size:.82rem}
+  th,td{padding:7px 12px; text-align:right; white-space:nowrap}
   th:first-child,td:first-child{text-align:left}
-  th{color:var(--mute);font-weight:600}
-  .tablebox{background:var(--card);border-radius:12px;padding:14px;border:1px solid var(--line);margin-top:14px;overflow-x:auto}
-  .err{background:#7f1d1d;padding:10px 14px;border-radius:8px;margin-bottom:14px;display:none}
+  thead th{position:sticky; top:0; background:#131d31; color:var(--mute); font-weight:500; z-index:1; border-bottom:1px solid var(--line)}
+  tbody tr:nth-child(even){background:rgba(255,255,255,.025)}
+  tbody tr:hover{background:rgba(99,102,241,.14)}
+  td{border-bottom:1px solid rgba(148,163,184,.08); font-variant-numeric:tabular-nums}
+  .empty{padding:26px; text-align:center; color:var(--mute)}
+  .tablescroll::-webkit-scrollbar{width:9px;height:9px} .tablescroll::-webkit-scrollbar-thumb{background:#334155; border-radius:8px}
+
+  footer{text-align:center; color:var(--mute); font-size:.8rem; padding:8px 0 28px}
+  @media (max-width:600px){ header{padding:12px 14px} select{min-width:0; width:100%} .info{margin-left:0} .val{font-size:1.8rem} }
 </style>
 </head>
 <body>
 <header>
-  <h1>🌡️ IoT Freeboard <span style="color:var(--mute);font-weight:400">· iot-205</span></h1>
-  <div class="status"><span class="dot" id="dot"></span><span id="status">กำลังเชื่อมต่อ...</span></div>
+  <div class="brand">
+    <div class="logo">📡</div>
+    <div><h1>IoT Freeboard</h1><small>iot-205 · Realtime Dashboard</small></div>
+  </div>
+  <div class="pill" id="pill"><span class="dot" id="dot"></span><span id="status">กำลังเชื่อมต่อ...</span></div>
 </header>
+
 <main>
   <div class="err" id="err"></div>
-  <div class="cards" id="cards"></div>
+
+  <div class="sec-title">ค่าล่าสุด (Realtime)</div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="sec-title">เลือกช่วงเวลาที่ต้องการดู</div>
+  <div class="toolbar">
+    <label for="range">ช่วงเวลา</label>
+    <select id="range"></select>
+    <div class="info" id="info">กำลังโหลด...</div>
+  </div>
+
+  <div class="sec-title">สถิติรวมของช่วงที่เลือก</div>
+  <div class="stats" id="stats"></div>
+
+  <div class="sec-title">กราฟแนวโน้ม</div>
   <div class="charts" id="charts"></div>
+
+  <div class="sec-title">ประวัติข้อมูล (History)</div>
   <div class="tablebox">
-    <h3 style="margin:0 0 8px">ประวัติล่าสุด (History)</h3>
-    <table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+    <div class="tablescroll">
+      <table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+      <div class="empty" id="empty" style="display:none">ไม่มีข้อมูลในช่วงเวลานี้</div>
+    </div>
   </div>
 </main>
+<footer>ESP32 → Firebase Realtime Database → GitHub Pages</footer>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, onValue, query, limitToLast, orderByKey } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, onValue, query, limitToLast, orderByKey, orderByChild, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-// ===== แก้ค่านี้: ดูได้ที่ Firebase Console > Project settings > Your apps > Web app =====
 const firebaseConfig = {
   apiKey: "AIzaSyC7SXffNszDQHdixCtC40jri5L0lniLnts",
   authDomain: "iot-205-dd293.firebaseapp.com",
@@ -61,76 +175,178 @@ const firebaseConfig = {
   messagingSenderId: "1012559054991",
   appId: "1:1012559054991:web:43c2e54a1bd207f5a088fa"
 };
-// ==========================================================================================
 
 const FIELDS = [
-  { key:"temperature",   label:"อุณหภูมิ",     unit:"°C",    color:"#f97316", dec:1 },
-  { key:"humidity",      label:"ความชื้นอากาศ", unit:"%",     color:"#38bdf8", dec:1 },
-  { key:"light",         label:"ความสว่าง",     unit:"lux",   color:"#facc15", dec:0 },
-  { key:"soil_moisture", label:"ความชื้นดิน",   unit:"%",     color:"#a3e635", dec:1 },
-  { key:"pm25",          label:"ฝุ่น PM2.5",    unit:"µg/m³", color:"#f472b6", dec:1 },
-  { key:"battery",       label:"แบตเตอรี่",     unit:"%",     color:"#34d399", dec:0 },
+  { key:"temperature",   label:"อุณหภูมิ",     unit:"°C",    color:"#fb923c", dec:1, icon:"🌡️" },
+  { key:"humidity",      label:"ความชื้นอากาศ", unit:"%",     color:"#38bdf8", dec:1, icon:"💧" },
+  { key:"light",         label:"ความสว่าง",     unit:"lux",   color:"#facc15", dec:0, icon:"☀️" },
+  { key:"soil_moisture", label:"ความชื้นดิน",   unit:"%",     color:"#a3e635", dec:1, icon:"🌱" },
+  { key:"pm25",          label:"ฝุ่น PM2.5",    unit:"µg/m³", color:"#f472b6", dec:1, icon:"🌫️" },
+  { key:"battery",       label:"แบตเตอรี่",     unit:"%",     color:"#34d399", dec:0, icon:"🔋" },
 ];
-const HISTORY_N = 30;
-const STALE_MS = 60000; // เกิน 60 วิ ถือว่า offline
+const LIVE_N = 60;          // โหมด Live แสดงกี่รายการล่าสุด
+const HOUR_MS = 3600000;
+const STALE_MS = 60000;     // เกิน 60 วิ ถือว่า offline
 
 const $ = id => document.getElementById(id);
-$("cards").innerHTML = FIELDS.map(f=>`<div class="card"><div class="lbl">${f.label}</div><div class="val" id="v_${f.key}" style="color:${f.color}">--<span class="unit"> ${f.unit}</span></div></div>`).join("");
-$("charts").innerHTML = FIELDS.map(f=>`<div class="chartbox"><h3>${f.label} (${f.unit})</h3><canvas id="c_${f.key}"></canvas></div>`).join("");
+const pad = n => String(n).padStart(2,"0");
+const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString("th-TH",{hour12:false}) : "-";
+const showErr = m => { const e=$("err"); e.textContent=m; e.style.display="block"; };
+
+/* ---------- สร้างหน้า ---------- */
+$("kpis").innerHTML = FIELDS.map(f=>`
+  <div class="kpi" id="k_${f.key}" style="--c:${f.color}">
+    <div class="kpi-top"><span class="ico">${f.icon}</span><span>${f.label}</span></div>
+    <div class="val"><span id="v_${f.key}">--</span><span class="unit">${f.unit}</span></div>
+    <div class="delta" id="d_${f.key}">&nbsp;</div>
+  </div>`).join("");
+
+$("stats").innerHTML = FIELDS.map(f=>`
+  <div class="stat" style="--c:${f.color}">
+    <div class="stat-h">${f.icon} ${f.label} <small>(${f.unit})</small></div>
+    <div class="stat-row">
+      <div><span>ต่ำสุด</span><b id="min_${f.key}">-</b></div>
+      <div><span>เฉลี่ย</span><b id="avg_${f.key}">-</b></div>
+      <div><span>สูงสุด</span><b id="max_${f.key}">-</b></div>
+    </div>
+  </div>`).join("");
+
+$("charts").innerHTML = FIELDS.map(f=>`
+  <div class="chartbox"><h3>${f.icon} ${f.label} <span>${f.unit}</span></h3>
+  <div class="chartwrap"><canvas id="c_${f.key}"></canvas></div></div>`).join("");
+
 $("thead").innerHTML = "<tr><th>เวลา</th>"+FIELDS.map(f=>`<th>${f.label}</th>`).join("")+"</tr>";
 
+/* ---------- กราฟ ---------- */
+Chart.defaults.color = "#94a3b8";
+Chart.defaults.font.family = "Sarabun, sans-serif";
 const charts = {};
 FIELDS.forEach(f=>{
   charts[f.key] = new Chart($("c_"+f.key), {
     type:"line",
-    data:{ labels:[], datasets:[{ data:[], borderColor:f.color, backgroundColor:f.color+"33", fill:true, tension:.3, pointRadius:2 }] },
-    options:{ animation:false, plugins:{legend:{display:false}},
-      scales:{ x:{ticks:{color:"#94a3b8",maxTicksLimit:6},grid:{color:"#334155"}}, y:{ticks:{color:"#94a3b8"},grid:{color:"#334155"}} } }
+    data:{ labels:[], datasets:[{
+      data:[], borderColor:f.color, borderWidth:2, tension:.35, fill:true, pointRadius:2, pointHoverRadius:5,
+      backgroundColor:(c)=>{
+        const {ctx, chartArea} = c.chart; if(!chartArea) return f.color+"33";
+        const g = ctx.createLinearGradient(0,chartArea.top,0,chartArea.bottom);
+        g.addColorStop(0,f.color+"66"); g.addColorStop(1,f.color+"05"); return g;
+      }
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:false,
+      interaction:{ mode:"index", intersect:false },
+      plugins:{ legend:{display:false},
+        tooltip:{ backgroundColor:"#0f172a", borderColor:f.color, borderWidth:1, padding:10, displayColors:false,
+          callbacks:{ label:c=>`${f.label}: ${Number(c.parsed.y).toFixed(f.dec)} ${f.unit}` } } },
+      scales:{
+        x:{ ticks:{maxTicksLimit:6, maxRotation:0}, grid:{color:"rgba(148,163,184,.08)"} },
+        y:{ ticks:{maxTicksLimit:5}, grid:{color:"rgba(148,163,184,.12)"}, grace:"8%" }
+      }
+    }
   });
 });
 
-const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString("th-TH") : "-";
-let lastTs = 0;
+/* ---------- ตัวเลือกช่วงเวลา ---------- */
+let lastHourKey = null;
+function buildOptions(){
+  const base = new Date(); base.setMinutes(0,0,0);
+  const key = base.getTime();
+  if (key === lastHourKey) return;
+  lastHourKey = key;
+  const keep = $("range").value || "live";
+  let html = `<option value="live">🔴 Live · ล่าสุด ${LIVE_N} รายการ</option>`;
+  for (let i=0; i<48; i++){
+    const s = new Date(key - i*HOUR_MS);
+    const label = `${pad(s.getDate())}/${pad(s.getMonth()+1)}  ${pad(s.getHours())}:00 – ${pad(s.getHours())}:59` + (i===0 ? "  (ชั่วโมงนี้)" : "");
+    html += `<option value="${s.getTime()}">${label}</option>`;
+  }
+  $("range").innerHTML = html;
+  $("range").value = [...$("range").options].some(o=>o.value===keep) ? keep : "live";
+}
+buildOptions();
 
-function showErr(m){ const e=$("err"); e.textContent=m; e.style.display="block"; }
+/* ---------- แสดงผลข้อมูลช่วงที่เลือก ---------- */
+function render(rows){
+  const n = rows.length;
+  const labels = rows.map(r=>fmtTime(r.timestamp));
+  const showPoints = n <= 80;
+
+  FIELDS.forEach(f=>{
+    const vals = rows.map(r=>Number(r[f.key])).filter(v=>!isNaN(v));
+    const ch = charts[f.key];
+    ch.data.labels = labels;
+    ch.data.datasets[0].data = rows.map(r=>r[f.key]);
+    ch.data.datasets[0].pointRadius = showPoints ? 2 : 0;
+    ch.update();
+
+    if (vals.length){
+      const sum = vals.reduce((a,b)=>a+b,0);
+      $("min_"+f.key).textContent = Math.min(...vals).toFixed(f.dec);
+      $("max_"+f.key).textContent = Math.max(...vals).toFixed(f.dec);
+      $("avg_"+f.key).textContent = (sum/vals.length).toFixed(f.dec);
+    } else {
+      ["min_","avg_","max_"].forEach(p=>$(p+f.key).textContent="-");
+    }
+  });
+
+  const newest = [...rows].reverse();
+  $("tbody").innerHTML = newest.map(r=>
+    `<tr><td>${fmtTime(r.timestamp)}</td>${FIELDS.map(f=>`<td>${r[f.key]!=null?Number(r[f.key]).toFixed(f.dec):"-"}</td>`).join("")}</tr>`
+  ).join("");
+  $("empty").style.display = n ? "none" : "block";
+  $("info").innerHTML = n
+    ? `แสดง <b>${n}</b> รายการ · ${fmtTime(rows[0].timestamp)} – ${fmtTime(rows[n-1].timestamp)}`
+    : "ไม่มีข้อมูลในช่วงเวลานี้";
+}
 
 try {
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
 
-  // ค่าล่าสุด (Realtime)
+  /* ค่าล่าสุด */
+  let prev = null, lastTs = 0;
   onValue(ref(db,"latest"), snap=>{
     const d = snap.val(); if(!d) return;
     FIELDS.forEach(f=>{
-      const v = d[f.key];
-      $("v_"+f.key).innerHTML = (v!=null ? Number(v).toFixed(f.dec) : "--") + `<span class="unit"> ${f.unit}</span>`;
+      const v = Number(d[f.key]);
+      $("v_"+f.key).textContent = isNaN(v) ? "--" : v.toFixed(f.dec);
+      const de = $("d_"+f.key);
+      if (prev && !isNaN(v) && !isNaN(Number(prev[f.key]))){
+        const diff = v - Number(prev[f.key]);
+        if (Math.abs(diff) < 1e-9){ de.className="delta"; de.textContent="– คงที่"; }
+        else { de.className="delta "+(diff>0?"up":"down"); de.textContent=(diff>0?"▲ +":"▼ ")+diff.toFixed(f.dec); }
+      }
+      const k = $("k_"+f.key); k.classList.remove("flash"); void k.offsetWidth; k.classList.add("flash");
     });
-    lastTs = Date.now();
-    $("dot").classList.add("on");
+    prev = d; lastTs = Date.now();
+    $("dot").classList.add("on"); $("pill").classList.add("online");
     $("status").textContent = "Online · อัปเดตล่าสุด " + fmtTime(d.timestamp || Date.now());
   }, e=>showErr("อ่าน /latest ไม่ได้: "+e.message));
 
-  // ประวัติ (Realtime)
-  onValue(query(ref(db,"history"), orderByKey(), limitToLast(HISTORY_N)), snap=>{
-    const rows = [];
-    snap.forEach(c=>{ rows.push(c.val()); });  // ต้องไม่ return ค่า ไม่งั้น forEach หยุดหลังรายการแรก
-    rows.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
-    const labels = rows.map(r=>fmtTime(r.timestamp));
-    FIELDS.forEach(f=>{
-      const ch = charts[f.key];
-      ch.data.labels = labels;
-      ch.data.datasets[0].data = rows.map(r=>r[f.key]);
-      ch.update();
-    });
-    $("tbody").innerHTML = rows.slice().reverse().slice(0,15).map(r=>
-      `<tr><td>${fmtTime(r.timestamp)}</td>${FIELDS.map(f=>`<td>${r[f.key]!=null?Number(r[f.key]).toFixed(f.dec):"-"}</td>`).join("")}</tr>`
-    ).join("");
-  }, e=>showErr("อ่าน /history ไม่ได้: "+e.message));
+  /* ประวัติ ตามช่วงที่เลือก */
+  let unsub = null;
+  function subscribe(){
+    if (unsub) unsub();
+    const v = $("range").value;
+    const hist = ref(db,"history");
+    const q = v === "live"
+      ? query(hist, orderByKey(), limitToLast(LIVE_N))
+      : query(hist, orderByChild("timestamp"), startAt(Number(v)), endAt(Number(v)+HOUR_MS-1));
+    $("info").textContent = "กำลังโหลด...";
+    unsub = onValue(q, snap=>{
+      const rows = [];
+      snap.forEach(c=>{ rows.push(c.val()); });      // ห้าม return ค่า ไม่งั้น forEach จะหยุด
+      rows.sort((a,b)=>(a.timestamp||0)-(b.timestamp||0));
+      render(rows);
+    }, e=>showErr("อ่าน /history ไม่ได้: "+e.message));
+  }
+  $("range").addEventListener("change", subscribe);
+  subscribe();
 
-  // เช็คว่าอุปกรณ์ยังส่งข้อมูลอยู่ไหม
   setInterval(()=>{
-    if(lastTs && Date.now()-lastTs > STALE_MS){
-      $("dot").classList.remove("on");
+    buildOptions();
+    if (lastTs && Date.now()-lastTs > STALE_MS){
+      $("dot").classList.remove("on"); $("pill").classList.remove("online");
       $("status").textContent = "ไม่มีข้อมูลใหม่เกิน 1 นาที";
     }
   }, 5000);
